@@ -197,4 +197,7 @@ clean:
 	*)   $(MAKEARCH) -C $(@:_clean=) clean;; \
 	esac
 
+print-%:
+    print-%: ; @echo macro $* is defined as '$($*)'
+    
 ############################################################################
