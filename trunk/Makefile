@@ -5,7 +5,7 @@
 # Copyright (c) 2001-2004, SnapGear (www.snapgear.com)
 # Copyright (c) 2001, Lineo
 #
-
+# Mytest
 VERSIONPKG = 1.1
 
 ############################################################################
