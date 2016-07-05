@@ -25,5 +25,18 @@ then
 	pushd ./trunk
 		./build_firmware
 	popd
+	exit 
+fi
+
+if [ ${CompBuilding} == all ]
+then
+	echo building toolchain now!!!
+	pushd ./toolchain
+		./build_toolchain_3.4.x
+	popd
+	pushd ./trunk
+		./build_firmware
+	popd
+	exit 
 fi
 
