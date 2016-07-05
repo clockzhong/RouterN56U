@@ -1,7 +1,6 @@
 #!/bin/bash
 
-ROOT_PATH=`pwd`
-
+export ROOT_PATH=`pwd`
 
 #echo ROOT_PATH:${ROOT_PATH}
 
@@ -21,5 +20,10 @@ then
 	exit
 fi
 
-
+if [ ${CompBuilding} == img ]
+then
+	pushd ./trunk
+		./build_firmware
+	popd
+fi
 
