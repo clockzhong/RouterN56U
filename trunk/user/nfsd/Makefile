@@ -28,7 +28,7 @@ config_test:
 	fi )
 
 configure:
-	( cd $(SRC_NAME1) && \
+	( cd $(SRC_NAME1) && ./autogen.sh && \
 	knfsd_cv_bsd_signals=no \
 	./configure \
 		--prefix=/ \
