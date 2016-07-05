@@ -1,12 +1,12 @@
-#!/bin/bash
+#!/bin/sh
 
 DIR=`pwd`
 
 . "$DIR/versions.inc"
 
-KERNELVER="3.0.x"
-if [ "$1" = "--kernel-3_4" ] ; then
-    KERNELVER="3.4.x"
+KERNELVER="3.4.x"
+if [ "$1" = "--kernel-3_0" ] ; then
+    KERNELVER="3.0.x"
 fi
 
 DO_UNPACK=YES
@@ -37,38 +37,44 @@ export PREFIX="$DIR/$ID_TOOLCHAIN"
 export PATH="${PATH}:$PREFIX/bin:$PREFIX/lib"
 export CC=gcc
 
-##################################TUNE FOR CURRENT VERSION GCC BUILD####################################
-echo !!!!!!!!!!!!!!!!!!!!${LINENO}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+##################################TUNE FOR CURRENT VERSION HOST GCC BUILD###############################
+
 HOSTCFLAGS="-O2 -Wno-pointer-sign -Wno-trigraphs"
-HOSTGCCVER=`gcc --version | grep "gcc" | awk {' print $3 '} | cut -f -2 -d .`
+HOSTGCCVER=`gcc --version | grep "gcc" | awk {' print $3 '} | cut -f -2 -d '.'`
 echo "Host GCC version=$HOSTGCCVER"
 if [ "$HOSTGCCVER" != "4.3" ] && [ "$HOSTGCCVER" != "4.4" ]; then
     HOSTCFLAGS="$HOSTCFLAGS -Wno-format-security"
     if [ "$HOSTGCCVER" != "4.5" ]; then
         HOSTCFLAGS="$HOSTCFLAGS -Wno-unused-but-set-variable -Wno-sizeof-pointer-memaccess"
+        HOSTCFLAGS="$HOSTCFLAGS -fno-delete-null-pointer-checks"
+    fi
+    if [ "$HOSTGCCVER" \> "5.0" ]; then
+        HOSTCFLAGS="$HOSTCFLAGS -fgnu89-inline"
     fi
 fi
 export CFLAGS="$HOSTCFLAGS"
 
+##################################TUNE FOR CURRENT VERSION TARGET GCC BUILD#############################
+
+GCCMJ=`echo $GCCVER | cut -f -2 -d '.'`
+echo "Target GCC version=$GCCMJ"
 EXT_OPT="--disable-sanity-checks --disable-werror"
 EXT_OPT="$EXT_OPT --disable-lto --enable-ld=yes --enable-gold=no"
-if [ "$GCCVER" = "4.6.4" ] || [ "$GCCVER" = "4.7.4" ] || [ "$GCCVER" = "4.8.3" ]; then
+if [ "$GCCMJ" = "4.6" ] || [ "$GCCMJ" = "4.7" ] || [ "$GCCMJ" = "4.8" ] || [ "$GCCMJ" = "4.9" ]; then
     EXT_OPT="$EXT_OPT --disable-biendian --disable-softfloat"
     EXT_OPT="$EXT_OPT --disable-libquadmath --disable-libquadmath-support"
 fi
-if [ "$GCCVER" = "4.8.3" ]; then
+if [ "$GCCMJ" = "4.8" ] || [ "$GCCMJ" = "4.9" ]; then
     EXT_OPT="$EXT_OPT --disable-libatomic --with-pic"
 fi
 
 #####################################CHECK TLS SUPPORT FOR UCLIBC#######################################
-echo !!!!!!!!!!!!!!!!!!!!${LINENO}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-UCLIBCM=`echo $UCLIBCVER | cut -f3 -d '.' `
+
+UCLIBCMJ=`echo $UCLIBCVER | cut -f3 -d '.' `
 
 TLS_OPT="--disable-tls --disable-threads"
-if [ $UCLIBCM -ge 32 ] ; then
-    eval `grep \^UCLIBC_HAS_TLS= "$TARGET_DIR/${ID_UCLIBC}.config"`
-    [ "$UCLIBC_HAS_TLS" = "y" ] && TLS_OPT="--enable-tls --enable-threads=posix"
-fi
+eval `grep \^UCLIBC_HAS_TLS= "$TARGET_DIR/${ID_UCLIBC}.config"`
+[ "$UCLIBC_HAS_TLS" = "y" ] && TLS_OPT="--enable-tls --enable-threads=posix"
 
 #########################################################################################################
 
@@ -81,9 +87,6 @@ if [ "$DO_UNPACK" = "YES" ]; then
     echo "=================EXTRACT-KERNEL-HEADERS================="
     rm -rf include
     tar xjf kernel-headers-${KERNELVER}.tar.bz2
-    if [ $UCLIBCM -le 28 ] ; then
-        tar xjf uClibc-$UCLIBCVER-headers.tar.bz2
-    fi
     echo "====================EXTRACT-BINUTILS===================="
     rm -rf $ID_BINUTILS
     tar xjf $ID_BINUTILS.tar.bz2
@@ -95,37 +98,35 @@ if [ "$DO_UNPACK" = "YES" ]; then
     tar xjf $ID_GCC.tar.bz2
     echo "===================PATCHING-BINUTILS===================="
     cd $ID_BINUTILS
-    for i in `ls ../patches/${ID_BINUTILS}*.patch 2>/dev/null` ; do
+    for i in `ls ../patches/${ID_BINUTILS}/*.patch 2>/dev/null` ; do
         [ -f ${i} ] && patch -p1 < ${i}
     done
     cd ..
     echo "=====================PATCHING-GCC======================="
     cd $ID_GCC
-    for i in `ls ../patches/${ID_GCC}*.patch 2>/dev/null` ; do
+    for i in `ls ../patches/${ID_GCC}/*.patch 2>/dev/null` ; do
         [ -f ${i} ] && patch -p1 < ${i}
     done
     cd ..
     echo "====================PATCHING-UCLIBC====================="
     cd $ID_UCLIBC
-    for i in `ls ../patches/${ID_UCLIBC}*.patch 2>/dev/null` ; do
+    for i in `ls ../patches/${ID_UCLIBC}/*.patch 2>/dev/null` ; do
         [ -f ${i} ] && patch -p1 < ${i}
     done
     cd ..
 fi
-echo !!!!!!!!!!!!!!!!!!!!${LINENO}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 if [ "$DO_HEADERS" = "YES" ]; then
     echo "=====================BUILD-C-HEADERS===================="
     rm -rf "$PREFIX/include"
     rm -rf "$PREFIX/usr/include"
     cp -rf "$TARGET_DIR/include" "$PREFIX/include"
-    if [ $UCLIBCM -gt 28 ] ; then
-        cp -fv ${ID_UCLIBC}.config $ID_UCLIBC/.config
-        make -C $ID_UCLIBC install_headers
-    fi
+    cp -fv ${ID_UCLIBC}.config $ID_UCLIBC/.config
+    make -C $ID_UCLIBC install_headers
     mkdir -p "$PREFIX/usr"
     ln -sf ../include "$PREFIX/usr/include"
 fi
-echo !!!!!!!!!!!!!!!!!!!!${LINENO}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 if [ "$DO_BINUTILS" = "YES" ]; then
     echo "=====================BUILD-BINUTILS====================="
     mkdir -p build-binutils && cd build-binutils
@@ -136,7 +137,7 @@ if [ "$DO_BINUTILS" = "YES" ]; then
     make install) || exit 1
     cd ..
 fi
-echo !!!!!!!!!!!!!!!!!!!!${LINENO}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 if [ "$DO_GCC" = "YES" ]; then
     echo "=====================BUILD-GCC-C========================"
     mkdir -p build-gcc-bootstrap && cd build-gcc-bootstrap
@@ -152,7 +153,7 @@ if [ "$DO_GCC" = "YES" ]; then
     make install) || exit 1
     cd ..
 fi
-echo !!!!!!!!!!!!!!!!!!!!${LINENO}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 if [ "$DO_UCLIBC" = "YES" ]; then
     echo "=====================BUILD-UCLIBC======================="
     cp -fv ${ID_UCLIBC}.config $ID_UCLIBC/.config
@@ -161,7 +162,7 @@ if [ "$DO_UCLIBC" = "YES" ]; then
      make install) || exit 1
     cd ..
 fi
-echo !!!!!!!!!!!!!!!!!!!!${LINENO}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 if [ "$DO_GCCCPP" = "YES" ]; then
     echo "====================BUILD-GCC-CPP======================="
     mkdir -p build-gcc-bootstrap-cpp && cd build-gcc-bootstrap-cpp
@@ -177,9 +178,9 @@ if [ "$DO_GCCCPP" = "YES" ]; then
     make install-host install-target-libgcc install-target-libstdc++-v3) || exit 1
     cd ..
 fi
-echo !!!!!!!!!!!!!!!!!!!!${LINENO}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 # sanity
-if [ "$GCCVER" = "4.4.7" ] ; then
+if [ "$GCCMJ" = "4.4" ] ; then
 	cp -rf "$PREFIX/man" "$PREFIX/share" && rm -rf "$PREFIX/man"
 	cp -rf "$PREFIX/info" "$PREFIX/share" && rm -rf "$PREFIX/info"
 fi
